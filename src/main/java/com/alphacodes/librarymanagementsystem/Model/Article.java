@@ -23,14 +23,14 @@ public class Article {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "body", nullable = false)
+    @Column(name = "body", nullable = false, columnDefinition = "TEXT")
     private String body;
 
     @Column(name = "date_created", nullable = false)
     private Date dateCreated = new Date(); // Initialize with current date/time
 
     @Lob
-    @Column(name = "article_img")
+    @Column(name = "article_img", columnDefinition = "LONGBLOB")
     private byte[] articleImg;
 
     @ManyToOne(fetch = FetchType.EAGER)

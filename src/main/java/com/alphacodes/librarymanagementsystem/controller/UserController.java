@@ -7,8 +7,11 @@ import com.alphacodes.librarymanagementsystem.repository.UserRepository;
 import com.alphacodes.librarymanagementsystem.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -16,11 +19,13 @@ import java.util.List;
 public class UserController {
     private final UserService userService;
     private final UserRepository userRepository;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
 
 
-    public UserController(UserService userService, UserRepository userRepository) {
+    public UserController(UserService userService, UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
         this.userService = userService;
         this.userRepository = userRepository;
+        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
     }
 
     @PostMapping("/checkDetails")
@@ -73,9 +78,14 @@ public class UserController {
            return userService.sendOtp(emailDto.getEmailAddress());
     }
 
-    @PostMapping("/changePassword")
-        public Boolean changePassword(@RequestBody LoginRequest loginRequest) {
-            return userService.changePassword(loginRequest.getEmailAddress(), loginRequest.getPassword());
+
+       // make some changes here
+    @PostMapping("/resetPassword")
+        public Boolean changePassword(@RequestBody ResetPasswordRequest resetPasswordRequest) {
+            if (resetPasswordRequest.getIsVerified()){
+                return userService.changePassword(resetPasswordRequest.getEmailAddress(), resetPasswordRequest.getPassword());
+            }
+            return false;
     }
 
     @PostMapping("/verifyOTP")
@@ -107,5 +117,74 @@ public class UserController {
         user.setPhoneNumber(userSaveAndVerifyOtpDto.getPhoneNumber());
         user.setPassword(userSaveAndVerifyOtpDto.getPassword());
         return user;
+    }
+
+    @PutMapping("/updateUserProfile/{id}")
+    public ResponseEntity<UserDto> updateUserProfile(
+            @PathVariable String id,
+
+            @RequestParam("firstName") String firstName,
+            @RequestParam("lastName") String lastName,
+            @RequestParam("email") String Email,
+            @RequestParam("phoneNumber") String phoneNumber,
+            @RequestParam(value = "profileImg", required = false) MultipartFile profileImg
+    ) throws IOException {
+        System.out.println("Received request to update profile for userID: " + id);
+
+        // Create a new user profile DTO
+        UserDto userDto = new UserDto();
+        userDto.setFirstName(firstName);
+        userDto.setLastName(lastName);
+        userDto.setEmail(Email);
+        userDto.setPhoneNumber(phoneNumber);
+
+        if(profileImg != null) {
+            userDto.setProfileImg(profileImg.getBytes());
+        } else {
+            userDto.setProfileImg(null);
+        }
+
+        UserDto updatedUserDto = userService.updateUserProfile(id, userDto);
+
+        // If user profile is not found return 404
+        if (updatedUserDto == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        return ResponseEntity.ok(updatedUserDto);
+    }
+
+    @GetMapping("/getUserProfileDetails/{id}")
+    public ResponseEntity<UserDto> getUserProfileDetails(@PathVariable String id) {
+        UserDto userDto = userService.getUserProfileDetails(id);
+        return ResponseEntity.ok(userDto);
+    }
+
+    @PostMapping("/changePassword/{id}")
+    public Boolean changePassword(@PathVariable String id, @RequestBody ChangePasswordRequest changePasswordRequest) {
+        User user = userRepository.findByUserID(id);
+        boolean isPasswordMatch = bCryptPasswordEncoder.matches(changePasswordRequest.getOldPassword(), user.getPassword());
+        if (isPasswordMatch) {
+            userService.changePassword(user.getEmailAddress(), changePasswordRequest.getNewPassword());
+            return true;
+        }
+        return false;
+    }
+
+    @DeleteMapping("/deleteUserProfile/{id}")
+    public Boolean deleteUserProfile(@PathVariable String id) {
+        userService.deleteUserProfile(id);
+        return true;
+    }
+
+    @PostMapping("librarian/addUser")
+    public ResponseEntity<String> addUser(
+            @RequestParam("email") String email,
+            @RequestParam("phoneNumber") String phoneNumber,
+            @RequestParam("indexNumber") String indexNumber
+    ) {
+        return new ResponseEntity<>(userService
+                .LibrarianAddUser(email, phoneNumber, indexNumber), HttpStatus.OK
+        );
     }
 }
